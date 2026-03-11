@@ -203,12 +203,19 @@
         }
       }
 
-      async function getCircuitSvg(url) {
+      async function getCircuitSvg(url, circuitKey) {
         if (cache.circuitSvgs[url]) return cache.circuitSvgs[url];
+
+        const fallbackMadrid = "M -250,150 L 50,150 C 80,150 100,130 100,100 L 100,-50 C 100,-80 120,-100 150,-100 L 300,-100 C 350,-100 380,-50 350,0 C 320,50 250,80 200,50 L 0,-50 C -30,-70 -50,-50 -50,-20 L -50,50 C -50,80 -70,100 -100,100 L -300,100 C -330,100 -350,120 -350,150 Z";
 
         try {
           const resp = await fetch(url);
-          if (!resp.ok) return null;
+          if (!resp.ok) {
+            if (circuitKey === 153 || /madrid/i.test(url)) {
+              return { path: fallbackMadrid, finishLine: null };
+            }
+            return null;
+          }
 
           const data = await resp.json();
           const { x: xCoords = [], y: yCoords = [], rotation = 0 } = data;
@@ -253,6 +260,9 @@
           saveCache();
           return result;
         } catch (e) {
+          if (circuitKey === 153 || /madrid/i.test(url)) {
+            return { path: fallbackMadrid, finishLine: null };
+          }
           return null;
         }
       }
@@ -304,7 +314,7 @@
           isTesting: /test/i.test(target.meeting_name)
         };
 
-        const svgData = target.circuit_info_url ? await getCircuitSvg(target.circuit_info_url) : null;
+        const svgData = target.circuit_info_url ? await getCircuitSvg(target.circuit_info_url, target.circuit_key) : null;
         state.circuitSvg = svgData?.path || CONFIG.DEFAULT_SVG;
         state.finishLine = svgData?.finishLine || null;
 
