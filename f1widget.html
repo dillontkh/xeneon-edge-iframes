@@ -17,6 +17,11 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
+    :root {
+      --transition-speed: 0.15s;
+      --pulse-duration: 1.2s;
+    }
+
     body {
       font-family: 'JetBrains Mono', monospace;
       background-color: #000000;
@@ -42,7 +47,7 @@
       border-radius: 6px;
       color: #71717a;
       cursor: pointer;
-      transition: color 0.15s ease, opacity 0.15s ease;
+      transition: color var(--transition-speed) ease, opacity var(--transition-speed) ease;
     }
 
     .nav-btn:hover:not(:disabled) {
@@ -68,7 +73,7 @@
       background: rgba(239, 68, 68, 0.2);
       border: 1px solid rgba(239, 68, 68, 0.4);
       color: #ef4444;
-      animation: pulse 1.2s infinite;
+      animation: pulse var(--pulse-duration) infinite;
     }
 
     .status-finished {
@@ -99,7 +104,7 @@
       text-transform: uppercase;
       letter-spacing: 0.1em;
       cursor: pointer;
-      transition: background 0.15s ease, transform 0.15s ease;
+      transition: background var(--transition-speed) ease, transform var(--transition-speed) ease;
     }
 
     .jump-btn:hover {
@@ -111,7 +116,7 @@
     }
 
     .animate-pulse-urgent {
-      animation: pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      animation: pulse var(--pulse-duration) cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
   </style>
 </head>
@@ -123,11 +128,18 @@
   <script>
     (function() {
       // --- Constants ---
+      const TIME = {
+        SEC: 1000,
+        MIN: 60000,
+        HOUR: 3600000,
+        DAY: 86400000
+      };
+
       const CONFIG = {
         SESSIONS_URL: "https://api.openf1.org/v1/sessions",
         MEETINGS_URL: "https://api.openf1.org/v1/meetings",
         CACHE_KEY: 'f1_widget_cache',
-        CACHE_TTL: 24 * 60 * 60 * 1000,
+        CACHE_TTL: TIME.DAY,
         DEFAULT_SVG: "M 0,-50 Q 80,-50 80,0 Q 80,50 0,50 Q -80,50 -80,0 Q -80,-50 0,-50 Z"
       };
 
@@ -139,6 +151,7 @@
         finishLine: null,
         loading: true,
         error: null,
+        year: null,
         offset: 0,
         hasNext: false,
         hasPrev: false,
@@ -181,11 +194,16 @@
         state.loadingProgress = { loading: true, progress: 'Syncing F1 Data...' };
         renderFull();
 
-        const year = new Date().getFullYear();
         try {
+          if (!state.year) {
+            const latestResp = await fetch(`${CONFIG.MEETINGS_URL}?meeting_key=latest`);
+            const latestData = await latestResp.json();
+            state.year = (latestData && latestData[0]) ? new Date(latestData[0].date_start).getFullYear() : new Date().getFullYear();
+          }
+
           const [sResp, mResp] = await Promise.all([
-            fetch(`${CONFIG.SESSIONS_URL}?year=${year}`),
-            fetch(`${CONFIG.MEETINGS_URL}?year=${year}`)
+            fetch(`${CONFIG.SESSIONS_URL}?year=${state.year}`),
+            fetch(`${CONFIG.MEETINGS_URL}?year=${state.year}`)
           ]);
 
           if (!sResp.ok || !mResp.ok) throw new Error('API unreachable');
@@ -335,7 +353,7 @@
         }
 
         const diff = new Date(next.date_start) - now;
-        const days = Math.floor(diff / 86400000), hours = Math.floor((diff % 86400000) / 3600000), mins = Math.floor((diff % 3600000) / 60000);
+        const days = Math.floor(diff / TIME.DAY), hours = Math.floor((diff % TIME.DAY) / TIME.HOUR), mins = Math.floor((diff % TIME.HOUR) / TIME.MIN);
 
         if (days > 0) {
           state.countdownText = `${days}D ${hours}H`;
@@ -413,8 +431,8 @@
 
         if (now < start) {
           const diff = start - now;
-          if (diff < 86400000) {
-            const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
+          if (diff < TIME.DAY) {
+            const h = Math.floor(diff/TIME.HOUR), m = Math.floor((diff%TIME.HOUR)/TIME.MIN);
             status = { text: h > 0 ? `${h}h ${m}m` : `${m}m`, class: 'status-upcoming' };
           }
         } else if (now <= end) {
@@ -437,7 +455,7 @@
       }
 
       function formatRange(s, e) {
-        const opt = { month: 'short', day: 'numeric' };
+        const opt = { month: 'short', day: 'numeric', year: 'numeric' };
         return `${new Date(s).toLocaleDateString(undefined, opt)} - ${new Date(e).toLocaleDateString(undefined, opt)}`;
       }
 
@@ -460,7 +478,7 @@
       // --- Init ---
       loadCache();
       updateWeekendData();
-      setInterval(fastTick, 1000);
+      setInterval(fastTick, TIME.SEC);
     })();
   </script>
 </body>
